@@ -5,11 +5,7 @@
                 <SplitHorizontal :min-panel-height="150" @split-move="updateDimensions">
                     <template #top>
                         <div class="left-top" ref="leftTopRef">
-                            <!-- <h2>LEFT-TOP {{ leftTopDimensions }}</h2> -->
-                            <p>
-                                Ici on pourrait mettre les prompts, les instructions, les instructions de formatage,
-                                etc.
-                            </p>
+                            <Chat />
                         </div>
                     </template>
                     <template #bottom>
@@ -81,6 +77,7 @@
 <script setup>
 import SplitVertical from '../components/SplitVertical.vue'
 import SplitHorizontal from '../components/SplitHorizontal.vue'
+import Chat from '../views/Chat.vue'
 
 import { ref, onMounted, computed, nextTick } from 'vue'
 

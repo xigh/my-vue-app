@@ -18,6 +18,7 @@ import Footer from './components/Footer.vue'
     margin: 0;
     padding: 0;
     font: inherit;
+    box-sizing: border-box; 
 }
 
 html,
