@@ -12,7 +12,16 @@
         </select>
   
         <!-- Waveform Canvas -->
-        <div class="waveform-container">
+        <div class="waveform-container" :class="{
+          'recording': isRecording && !isPaused,
+          'paused': isPaused,
+          'stopped': !isRecording
+        }">
+          <div class="recording-status" v-if="isRecording" :class="{ 'paused-status': isPaused }">
+            <span class="blink">
+              {{ isPaused ? 'PAUSED' : 'RECORDING' }}
+            </span>
+          </div>
           <canvas ref="waveformCanvas" width="500" height="100"></canvas>
         </div>
   
@@ -69,7 +78,7 @@
   </template>
   
   <script setup>
-  import { ref, onMounted, onBeforeUnmount } from 'vue'
+  import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
   
   const props = defineProps({
     modelValue: Boolean
@@ -77,7 +86,7 @@
   
   const emit = defineEmits(['update:modelValue', 'submit'])
   
-  const selectedDevice = ref('')
+  const selectedDevice = ref(localStorage.getItem('lastAudioDevice') || '')
   const audioDevices = ref([])
   const isRecording = ref(false)
   const isPaused = ref(false)
@@ -91,40 +100,78 @@
   let animationFrame = null
   let recordingInterval = null
   let audioChunks = []
+  let currentStream = null
   
   // Get available audio devices
-  const getAudioDevices = async () => {
+  const getAudioDevices = async (stream) => {
     try {
-      // First request microphone access to trigger permission prompt
-      await navigator.mediaDevices.getUserMedia({ audio: true })
-      
-      // Now enumerate devices - this will include labels
       const devices = await navigator.mediaDevices.enumerateDevices()
-      console.log('audio-devices :', devices)
       const filteredDevices = devices.filter(device => device.kind === 'audioinput')
-      console.log('filtered-audio-devices :', filteredDevices)
       audioDevices.value = filteredDevices
     } catch (error) {
       console.error('Error getting audio devices:', error)
     }
   }
   
+  // Activate microphone
+  const activateMicrophone = async () => {
+    try {
+      currentStream = await navigator.mediaDevices.getUserMedia({ 
+        audio: { deviceId: selectedDevice.value || undefined } 
+      })
+      await getAudioDevices(currentStream)
+      
+      // Initialize audio context and analyser here
+      audioContext = new AudioContext()
+      const source = audioContext.createMediaStreamSource(currentStream)
+      analyser = audioContext.createAnalyser()
+      analyser.fftSize = 256
+      source.connect(analyser)
+      
+      // Start drawing the waveform
+      drawWaveform()
+      
+      // Check if saved device still exists
+      const savedDevice = selectedDevice.value
+      if (savedDevice && !audioDevices.value.some(device => device.deviceId === savedDevice)) {
+        selectedDevice.value = ''
+        localStorage.removeItem('lastAudioDevice')
+      }
+    } catch (error) {
+      console.error('Error activating microphone:', error)
+    }
+  }
+  
+  // Deactivate microphone
+  const deactivateMicrophone = () => {
+    if (currentStream) {
+      currentStream.getTracks().forEach(track => track.stop())
+      currentStream = null
+    }
+  }
+  
   // Start recording
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
+      // Stop existing stream if it exists
+      if (currentStream) {
+        deactivateMicrophone()
+      }
+      
+      // Get new stream with selected device
+      currentStream = await navigator.mediaDevices.getUserMedia({
         audio: { deviceId: selectedDevice.value }
       })
       
-      // Set up audio context and analyser
+      // Reinitialize audio context and analyser
       audioContext = new AudioContext()
-      const source = audioContext.createMediaStreamSource(stream)
+      const source = audioContext.createMediaStreamSource(currentStream)
       analyser = audioContext.createAnalyser()
       analyser.fftSize = 256
       source.connect(analyser)
   
       // Set up media recorder
-      mediaRecorder = new MediaRecorder(stream)
+      mediaRecorder = new MediaRecorder(currentStream)
       audioChunks = []
       
       mediaRecorder.ondataavailable = (event) => {
@@ -180,8 +227,7 @@
       animationFrame = requestAnimationFrame(draw)
       analyser.getByteTimeDomainData(dataArray)
   
-      ctx.fillStyle = 'rgb(200, 200, 200)'
-      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
       ctx.lineWidth = 2
       ctx.strokeStyle = 'rgb(0, 0, 0)'
       ctx.beginPath()
@@ -212,14 +258,15 @@
   // Timer functions
   const startTimer = () => {
     recordingInterval = setInterval(() => {
-      recordingTime.value++
-    }, 1000)
+      recordingTime.value += 0.01
+    }, 10)
   }
   
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+    const secs = Math.floor(seconds % 60)
+    const centisecs = Math.floor((seconds * 100) % 100)
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${centisecs.toString().padStart(2, '0')}`
   }
   
   // Handle close
@@ -227,6 +274,7 @@
     if (isRecording.value) {
       stopRecording()
     }
+    deactivateMicrophone()
     emit('update:modelValue', false)
     resetState()
   }
@@ -242,24 +290,37 @@
   
   // Reset state
   const resetState = () => {
-    selectedDevice.value = ''
     isRecording.value = false
     isPaused.value = false
     recordingTime.value = 0
     audioBlob.value = null
     audioChunks = []
   }
-  
-  // Lifecycle hooks
-  onMounted(() => {
-    getAudioDevices()
-  })
-  
+    
   onBeforeUnmount(() => {
     if (isRecording.value) {
       stopRecording()
     }
+    deactivateMicrophone()
     audioContext?.close()
+  })
+  
+  // Watch for modal open/close
+  watch(() => props.modelValue, async (newValue) => {
+    if (newValue) {
+      // Modal opens
+      await activateMicrophone()
+    } else {
+      // Modal closes
+      deactivateMicrophone()
+    }
+  })
+  
+  // Sauvegarder le device ID quand il change
+  watch(selectedDevice, (newValue) => {
+    if (newValue) {
+      localStorage.setItem('lastAudioDevice', newValue)
+    }
   })
   </script>
   
@@ -278,6 +339,7 @@
   }
   
   .modal-content {
+    position: relative;
     background-color: white;
     padding: 1.5rem;
     border-radius: 8px;
@@ -294,10 +356,23 @@
   }
   
   .waveform-container {
-    background-color: #f5f5f5;
+    position: relative;
     border-radius: 4px;
     margin: 1rem 0;
     padding: 10px;
+    transition: background-color 0.3s ease;
+  }
+  
+  .waveform-container.stopped {
+    background-color: #f5f5f5;
+  }
+  
+  .waveform-container.recording {
+    background-color: rgba(220, 53, 69, 0.1); /* Rouge léger pour l'enregistrement */
+  }
+  
+  .waveform-container.paused {
+    background-color: rgba(255, 193, 7, 0.1); /* Jaune léger pour la pause */
   }
   
   .timer {
@@ -355,5 +430,28 @@
   button:disabled {
     background-color: #ccc;
     cursor: not-allowed;
+  }
+  
+  .recording-status {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    font-weight: bold;
+    color: #dc3545;
+    z-index: 1;
+  }
+  
+  .recording-status.paused-status {
+    color: #ffc107; /* Couleur jaune */
+  }
+  
+  @keyframes blink {
+    50% {
+      opacity: 0;
+    }
+  }
+  
+  .blink {
+    animation: blink 1s step-start infinite;
   }
   </style>
