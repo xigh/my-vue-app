@@ -65,7 +65,7 @@ const startResize = (e) => {
 
 .horizontal-resizer {
     height: 4px;
-    background-color: #f00;
+    background-color: #000;
     cursor: row-resize;
 }
 

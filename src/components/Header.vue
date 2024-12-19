@@ -11,6 +11,7 @@
 header {
     background-color: #444;
     color: #fff;
+    padding: 5px;
 }
 
 nav a {

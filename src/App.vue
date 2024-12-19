@@ -30,7 +30,7 @@ body {
 <style scoped>
 .app {
     display: grid;
-    grid-template-rows: auto 1fr auto;
+    grid-template-rows: min-content 1fr min-content;
     min-height: 100vh;
     width: 100%;
 }

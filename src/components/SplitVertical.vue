@@ -63,7 +63,7 @@ const startResize = (e) => {
 
 .resizer {
     width: 4px;
-    background-color: #f00;
+    background-color: #000;
     cursor: col-resize;
 }
 
