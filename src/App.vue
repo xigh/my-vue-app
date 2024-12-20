@@ -50,8 +50,8 @@ const handleKeydown = async (e) => {
 }
 
 const quitApp = async () => {
-    alert('Quitting app in Tauri environment')
     if (isTauri) {
+        alert('Quitting app in Tauri environment')
         await window.__TAURI__.process.exit(0)
     }
 }
