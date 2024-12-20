@@ -1,6 +1,7 @@
 import { createApp, h, Suspense } from 'vue'
 import router from './router'
 import App from './App.vue'
+import '@material-design-icons/font'
 
 const app = createApp({
     render() {

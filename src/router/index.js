@@ -21,7 +21,12 @@ const routes = [
         path: "/tauri",
         name: "Tauri",
         component: TauriInfo
-    }] : [])
+    }] : []),
+    {
+        path: '/document-window',
+        component: () => import('../views/DocumentWindow.vue'),
+        meta: { standalone: true }
+    }
 ];
 
 const router = createRouter({
