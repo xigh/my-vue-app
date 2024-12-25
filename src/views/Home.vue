@@ -28,7 +28,7 @@
 import SplitVertical from '../components/SplitVertical.vue'
 import SplitHorizontal from '../components/SplitHorizontal.vue'
 
-import { ref, onMounted, computed, nextTick } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 
 const leftTopRef = ref(null)
 const leftBottomRef = ref(null)
@@ -52,7 +52,9 @@ const updateDimensions = () => {
 
 // Update dimensions on window resize and split moves
 onMounted(() => {
-    window.addEventListener('resize', updateDimensions)
+    window.addEventListener('resize', () => {
+        updateDimensions()
+    })
 })
 </script>
 
